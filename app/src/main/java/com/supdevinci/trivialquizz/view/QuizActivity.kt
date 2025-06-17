@@ -1,6 +1,5 @@
 package com.supdevinci.trivialquizz.view
 
-import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -11,34 +10,33 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import com.supdevinci.trivialquizz.model.Category
-import com.supdevinci.trivialquizz.model.ScoreEntry
 import com.supdevinci.trivialquizz.model.UserAnswer
 import com.supdevinci.trivialquizz.ui.theme.TrivialQuizzTheme
 import com.supdevinci.trivialquizz.viewmodel.QuizzViewModel
-import java.text.SimpleDateFormat
-import java.util.*
+import com.supdevinci.trivialquizz.viewmodel.LeaderboardViewModel
 
 class QuizActivity : ComponentActivity() {
     private val quizViewModel: QuizzViewModel by viewModels()
-    
+    private val leaderboardViewModel: LeaderboardViewModel by viewModels()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        
+
         val playerName = intent.getStringExtra("playerName") ?: "Anonymous"
         val categoryId = intent.getIntExtra("categoryId", -1)
         val categoryName = intent.getStringExtra("categoryName") ?: "All Categories"
         val difficulty = intent.getStringExtra("difficulty")
         val difficultyDisplay = intent.getStringExtra("difficultyDisplay") ?: "Any"
-        
+
         // Set category and difficulty in ViewModel
         if (categoryId != -1) {
             quizViewModel.selectCategory(Category(categoryId, categoryName))
         }
         quizViewModel.selectDifficulty(difficulty)
-        
+
         // Fetch questions
         quizViewModel.fetchQuestions()
-        
+
         setContent {
             TrivialQuizzTheme {
                 Surface(
@@ -48,7 +46,7 @@ class QuizActivity : ComponentActivity() {
                     val questions by quizViewModel.questions.collectAsState()
                     var showResults by remember { mutableStateOf(false) }
                     var quizResults by remember { mutableStateOf(Triple(0, 0, emptyList<UserAnswer>())) }
-                    
+
                     if (showResults) {
                         ResultScreen(
                             score = quizResults.first,
@@ -71,7 +69,7 @@ class QuizActivity : ComponentActivity() {
                                 onQuizFinished = { score, total, answers ->
                                     quizResults = Triple(score, total, answers)
                                     showResults = true
-                                    
+
                                     // Save score to leaderboard
                                     saveScore(
                                         playerName = playerName,
@@ -90,7 +88,7 @@ class QuizActivity : ComponentActivity() {
             }
         }
     }
-    
+
     private fun saveScore(
         playerName: String,
         score: Int,
@@ -98,28 +96,12 @@ class QuizActivity : ComponentActivity() {
         categoryName: String,
         difficultyDisplay: String
     ) {
-        // Calculate percentage
-        val percentage = (score * 100) / total
-        
-        // Format current date and time
-        val sdf = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
-        val currentDateTime = sdf.format(Date())
-        
-        // Create score entry
-        val scoreEntry = ScoreEntry(
-            rank = 1, // This will be recalculated when displaying the leaderboard
-            player = playerName,
-            category = categoryName,
+        leaderboardViewModel.addScore(
+            playerName = playerName,
+            categoryName = categoryName,
             difficulty = difficultyDisplay,
-            score = "$score/$total",
-            percentage = percentage,
-            date = currentDateTime
+            correctAnswers = score,
+            totalQuestions = total
         )
-        
-        // TODO: Save score to database or shared preferences
-        // For now, we'll just pass it to LeaderboardActivity
-        val intent = Intent(this, LeaderboardActivity::class.java)
-        intent.putExtra("newScore", scoreEntry)
-        // Don't start the activity yet, just prepare the intent
     }
 }

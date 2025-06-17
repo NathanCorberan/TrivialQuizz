@@ -1,9 +1,16 @@
 package com.supdevinci.trivialquizz.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
+import com.supdevinci.trivialquizz.data.local.ScoreDatabase
+import com.supdevinci.trivialquizz.data.local.ScoreEntity
+import com.supdevinci.trivialquizz.data.local.ScoreRepository
 import com.supdevinci.trivialquizz.model.ScoreEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -12,14 +19,37 @@ import java.util.Locale
  * ViewModel for managing leaderboard scores.
  * This class follows the MVVM pattern and uses StateFlow for state management.
  */
-class LeaderboardViewModel : ViewModel() {
+class LeaderboardViewModel(application: Application) : AndroidViewModel(application) {
+    private val repository: ScoreRepository
 
     // Scores state
     private val _scores = MutableStateFlow<List<ScoreEntry>>(emptyList())
     val scores: StateFlow<List<ScoreEntry>> = _scores
 
-    // Date formatter for consistent date formatting
     private val dateFormatter = SimpleDateFormat("dd/MM/yyyy HH:mm:ss", Locale.getDefault())
+
+    init {
+        val dao = ScoreDatabase.getDatabase(application).scoreDao()
+        repository = ScoreRepository(dao)
+        viewModelScope.launch {
+            repository.allScores.collectLatest { list ->
+                val entries = list
+                    .sortedByDescending { it.percentage }
+                    .mapIndexed { index, entity ->
+                        ScoreEntry(
+                            rank = index + 1,
+                            player = entity.player,
+                            category = entity.category,
+                            difficulty = entity.difficulty,
+                            score = entity.score,
+                            percentage = entity.percentage,
+                            date = dateFormatter.format(entity.date)
+                        )
+                    }
+                _scores.value = entries
+            }
+        }
+    }
 
     /**
      * Adds a new score entry to the leaderboard.
@@ -37,40 +67,28 @@ class LeaderboardViewModel : ViewModel() {
         correctAnswers: Int,
         totalQuestions: Int
     ) {
-        val currentScores = _scores.value.toMutableList()
         val percentage = if (totalQuestions > 0) (correctAnswers * 100) / totalQuestions else 0
         val scoreText = "$correctAnswers/$totalQuestions"
-        val currentDate = dateFormatter.format(Date())
-
-        // Calculate rank (1-based)
-        val rank = currentScores.size + 1
-
-        val newScore = ScoreEntry(
-            rank = rank,
+        val entity = ScoreEntity(
             player = playerName,
             category = categoryName,
             difficulty = difficulty,
             score = scoreText,
             percentage = percentage,
-            date = currentDate
+            date = Date()
         )
-
-        currentScores.add(newScore)
-
-        // Sort by percentage (descending) and update ranks
-        val sortedScores = currentScores.sortedByDescending { it.percentage }
-            .mapIndexed { index, entry -> 
-                entry.copy(rank = index + 1) 
-            }
-
-        _scores.value = sortedScores
+        viewModelScope.launch {
+            repository.insert(entity)
+        }
     }
 
     /**
      * Clears all scores from the leaderboard.
      */
     fun clearScores() {
-        _scores.value = emptyList()
+        viewModelScope.launch {
+            repository.clear()
+        }
     }
 
     /**
