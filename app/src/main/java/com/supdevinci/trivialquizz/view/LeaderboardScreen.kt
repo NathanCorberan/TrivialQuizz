@@ -19,7 +19,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelProvider
+import androidx.activity.viewModels
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.collectAsState
 import com.supdevinci.trivialquizz.viewmodel.LeaderboardViewModel
 import com.supdevinci.trivialquizz.model.ScoreEntry
 import com.supdevinci.trivialquizz.ui.theme.TrivialQuizzTheme
@@ -28,21 +30,20 @@ import androidx.compose.ui.text.style.TextOverflow
 
 class LeaderboardActivity : ComponentActivity() {
 
-    private lateinit var leaderboardViewModel: LeaderboardViewModel
+    private val leaderboardViewModel: LeaderboardViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-
-        leaderboardViewModel = ViewModelProvider(this)[LeaderboardViewModel::class.java]
 
         setContent {
             TrivialQuizzTheme {
                 Scaffold(
                     modifier = Modifier.fillMaxSize()
                 ) { innerPadding ->
+                    val scores by leaderboardViewModel.scores.collectAsState()
                     LeaderboardScreen(
-                        scores = leaderboardViewModel.scores.value,
+                        scores = scores,
                         onClearScores = { leaderboardViewModel.clearScores() },
                         onBackClick = { finish() },
                         modifier = Modifier.padding(innerPadding)
